@@ -30,6 +30,16 @@ st.title("Object Detection System")
 menu_options = ["Home", "Live Detection", "About", "Developers"]
 selected_option = st.sidebar.selectbox("Menu", menu_options)
 
+# Draw bounding boxes and labels
+def draw_bounding_boxes(image, detected_objects):
+    for obj in detected_objects:
+        x1, y1, x2, y2 = obj[2]
+        label = obj[0]
+        conf = obj[1]
+        cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(image, f"{label} ({conf:.2f})", (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
 # Process detection results
 def process_results(results, image):
     detected_objects = []
@@ -39,11 +49,36 @@ def process_results(results, image):
             label = model.names[int(bbox.cls)]
             conf = float(bbox.conf)
             detected_objects.append((label, conf, (x1, y1, x2, y2)))
-            # Draw bounding box and label on the image
-            cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(image, f"{label} ({conf:.2f})", (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    draw_bounding_boxes(image, detected_objects)
     return detected_objects
+
+# Handle image upload and processing
+def handle_image_upload(uploaded_image, confidence):
+    if uploaded_image and model:
+        image = Image.open(uploaded_image)
+        img_array = np.array(image)
+        results = model(img_array, conf=confidence)
+        detected_objects = process_results(results, img_array)
+        st.image(img_array, caption="Detected Objects", use_column_width=True)
+        st.write("Detected Objects:")
+        for obj in detected_objects:
+            st.write(f"Object: {obj[0]}, Confidence: {obj[1]:.2f}, Box: {obj[2]}")
+
+# Handle video upload and processing
+def handle_video_upload(uploaded_video, confidence):
+    if uploaded_video and model:
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(uploaded_video.read())
+            cap = cv2.VideoCapture(temp_file.name)
+            stframe = st.empty()
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                results = model(frame, conf=confidence)
+                process_results(results, frame)
+                stframe.image(frame, channels="BGR", use_column_width=True)
+            cap.release()
 
 # Home menu
 if selected_option == "Home":
@@ -53,32 +88,11 @@ if selected_option == "Home":
 
     if source == "Image":
         uploaded_image = st.file_uploader("Upload an image:", type=["jpg", "jpeg", "png"])
-        if uploaded_image and model:
-            image = Image.open(uploaded_image)
-            img_array = np.array(image)
-            results = model(img_array, conf=confidence)
-            detected_objects = process_results(results, img_array)
-            st.image(img_array, caption="Detected Objects", use_column_width=True)
-            st.write("Detected Objects:")
-            for obj in detected_objects:
-                st.write(f"Object: {obj[0]}, Confidence: {obj[1]:.2f}, Box: {obj[2]}")
+        handle_image_upload(uploaded_image, confidence)
 
     elif source == "Video":
         uploaded_video = st.file_uploader("Upload a video:", type=["mp4", "avi"])
-        if uploaded_video and model:
-            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                temp_file.write(uploaded_video.read())
-                cap = cv2.VideoCapture(temp_file.name)
-                stframe = st.empty()
-
-                while cap.isOpened():
-                    ret, frame = cap.read()
-                    if not ret:
-                        break
-                    results = model(frame, conf=confidence)
-                    process_results(results, frame)
-                    stframe.image(frame, channels="BGR", use_column_width=True)
-                cap.release()
+        handle_video_upload(uploaded_video, confidence)
 
 # Live Detection menu
 elif selected_option == "Live Detection":
@@ -120,4 +134,3 @@ elif selected_option == "Developers":
 # Instructions for errors
 if not model:
     st.error("Model not loaded. Check the weights path or deployment environment.")
-
