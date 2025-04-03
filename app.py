@@ -1,16 +1,22 @@
 import streamlit as st
+import cv2
 import numpy as np
 from PIL import Image
 from ultralytics import YOLO
-import cv2
+import asyncio
 import tempfile
+
+# Fix asyncio runtime issue
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
 
 # Load YOLOv8 model
 @st.cache_resource
 def load_model():
-    model_path = 'weights/yolov8n.pt'  # Specify the path to the YOLOv8 weights file
     try:
-        return YOLO(model_path)
+        return YOLO('weights/yolov8n.pt')  # Ensure the correct path to the model weights
     except Exception as e:
         st.error(f"Error loading YOLO model: {e}")
         return None
@@ -21,8 +27,8 @@ model = load_model()
 st.title("Object Detection System")
 
 # Sidebar menu
-menu_items = ["Home", "Live Detection", "About", "Developers"]
-selected_menu = st.sidebar.selectbox("Menu", menu_items)
+menu_options = ["Home", "Live Detection", "About", "Developers"]
+selected_option = st.sidebar.selectbox("Menu", menu_options)
 
 # Process detection results
 def process_results(results, image):
@@ -40,7 +46,7 @@ def process_results(results, image):
     return detected_objects
 
 # Home menu
-if selected_menu == "Home":
+if selected_option == "Home":
     st.subheader("Welcome to the Object Detection System")
     source = st.selectbox("Choose an input source:", ["Image", "Video"])
     confidence = st.slider("Model Confidence Threshold", 0.1, 1.0, 0.5)
@@ -52,7 +58,7 @@ if selected_menu == "Home":
             img_array = np.array(image)
             results = model(img_array, conf=confidence)
             detected_objects = process_results(results, img_array)
-            st.image(img_array, caption="Detected Objects", use_container_width=True)
+            st.image(img_array, caption="Detected Objects", use_column_width=True)
             st.write("Detected Objects:")
             for obj in detected_objects:
                 st.write(f"Object: {obj[0]}, Confidence: {obj[1]:.2f}, Box: {obj[2]}")
@@ -71,11 +77,11 @@ if selected_menu == "Home":
                         break
                     results = model(frame, conf=confidence)
                     process_results(results, frame)
-                    stframe.image(frame, channels="BGR", use_container_width=True)
+                    stframe.image(frame, channels="BGR", use_column_width=True)
                 cap.release()
 
 # Live Detection menu
-elif selected_menu == "Live Detection":
+elif selected_option == "Live Detection":
     st.subheader("Live Detection using Webcam")
     run_webcam = st.checkbox("Run Webcam")
     if run_webcam and model:
@@ -88,11 +94,11 @@ elif selected_menu == "Live Detection":
                 break
             results = model(frame)
             process_results(results, frame)
-            stframe.image(frame, channels="BGR", use_container_width=True)
+            stframe.image(frame, channels="BGR", use_column_width=True)
         cap.release()
 
 # About menu
-elif selected_menu == "About":
+elif selected_option == "About":
     st.subheader("About This Project")
     st.write("""
     This project demonstrates an Object Detection System built using YOLOv8 and Streamlit.
@@ -100,7 +106,7 @@ elif selected_menu == "About":
     """)
 
 # Developers menu
-elif selected_menu == "Developers":
+elif selected_option == "Developers":
     st.subheader("Developed By")
     st.write("""
     - **Dr. Suhashini Chaurasiya** (Guide)
@@ -114,3 +120,4 @@ elif selected_menu == "Developers":
 # Instructions for errors
 if not model:
     st.error("Model not loaded. Check the weights path or deployment environment.")
+
